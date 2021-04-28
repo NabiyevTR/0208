@@ -6,10 +6,12 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 
 public class ClientHandler {
     private Server server;
     private Socket socket;
+    private final int SOCKET_TIMEOUT = 120_000;
 
     private DataInputStream in;
     private DataOutputStream out;
@@ -26,7 +28,7 @@ public class ClientHandler {
 
             new Thread(() -> {
                 try {
-//                    socket.setSoTimeout(5000);
+                    socket.setSoTimeout(SOCKET_TIMEOUT);
                     //цикл аутентификации
                     while (true) {
                         String str = in.readUTF();
@@ -43,6 +45,7 @@ public class ClientHandler {
                                 login = token[1];
                                 if (newNick != null) {
                                     if (!server.isLoginAuthenticated(login)) {
+                                        socket.setSoTimeout(0);
                                         nickname = newNick;
                                         sendMsg(Command.AUTH_OK + " " + nickname);
                                         server.subscribe(this);
@@ -63,6 +66,7 @@ public class ClientHandler {
                                 boolean regSuccessful = server.getAuthService()
                                         .registration(token[1], token[2], token[3]);
                                 if (regSuccessful) {
+                                    socket.setSoTimeout(0);
                                     sendMsg(Command.REG_OK);
                                 } else {
                                     sendMsg(Command.REG_NO);
@@ -93,7 +97,14 @@ public class ClientHandler {
                         }
                     }
 
-//               SocketTimeoutException
+
+                } catch (SocketTimeoutException e) {
+                    try {
+                        System.out.println("Socket timeout for client " + socket.getRemoteSocketAddress());
+                        out.writeUTF(Command.END);
+                    } catch (IOException ioException) {
+                        ioException.printStackTrace();
+                    }
                 } catch (RuntimeException e) {
                     System.out.println(e.getMessage());
                 } catch (IOException e) {
